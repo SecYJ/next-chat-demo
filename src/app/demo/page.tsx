@@ -19,13 +19,7 @@ const DemoPage = () => {
 	const [userName, setUserName] = useState<string | null>(null);
 	const [connectionToken, setConnectionToken] = useState(0);
 	const ws = useWebSocket({ roomId, userName, token: connectionToken });
-	const [, forceRender] = useState({});
-
-	useEffect(() => {
-		forceRender({});
-	}, []);
-
-	const [inputValue, setInputValue] = useState("");
+        const [inputValue, setInputValue] = useState("");
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [connectionStatus, setConnectionStatus] = useState("Enter room info");
 	const [serverError, setServerError] = useState<string | null>(null);
