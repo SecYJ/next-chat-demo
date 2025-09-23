@@ -13,7 +13,7 @@ const roomSchema = z.object({
 	userName: z.string().trim().catch(""),
 });
 
-export const useWebSocket = ({ roomId, userName, token }: WebSocketArgs) => {
+export const useWebSocket = ({ roomId, userName }: WebSocketArgs) => {
 	const wsRef = useRef<WebSocket | null>(null);
 	const { roomId: normalizedRoom, userName: normalizedUserName } = roomSchema.parse({ roomId, userName });
 
@@ -46,7 +46,7 @@ export const useWebSocket = ({ roomId, userName, token }: WebSocketArgs) => {
 				wsRef.current = null;
 			}
 		};
-	}, [normalizedRoom, normalizedUserName, token]);
+	}, [normalizedRoom, normalizedUserName]);
 
 	return wsRef.current;
 };

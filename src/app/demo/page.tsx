@@ -1,47 +1,38 @@
 "use client";
 
 import { Badge, type BadgeProps } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SOCKET_STATUS } from "@/constants/socket-status";
-import { cn } from "@/lib/utils";
 import { Message, normalizeMessage, serverHistoryEntrySchema } from "@/utils/normalize-message";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
 import { z } from "zod";
+import FooterButton from "./_form/footer-button";
+import { formControl } from "./_form/form-control";
+import FormInput from "./_form/form-input";
+import HeaderButton from "./_form/header-button";
+import MessageArea from "./_message-area";
 import { useWebSocket } from "./_use-websocket";
 
 const DemoPage = () => {
-	const [roomInputValue, setRoomInputValue] = useState("");
-	const [userNameInputValue, setUserNameInputValue] = useState("");
+	const form = useForm({
+		formControl,
+	});
+
 	const [roomId, setRoomId] = useState<string | null>(null);
 	const [userName, setUserName] = useState<string | null>(null);
-	const [connectionToken, setConnectionToken] = useState(0);
-	const ws = useWebSocket({ roomId, userName, token: connectionToken });
-	const [inputValue, setInputValue] = useState("");
+	// const [connectionToken, setConnectionToken] = useState(0);
+	const ws = useWebSocket({ roomId, userName, token: 0 });
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [connectionStatus, setConnectionStatus] = useState("Enter room info");
 	const [serverError, setServerError] = useState<string | null>(null);
 
-	const socketRef = useRef<WebSocket | null>(null);
-	const scrollAreaRef = useRef<HTMLDivElement | null>(null);
-
-	console.log("add");
-
-	useEffect(() => {
-		setMessages([]);
-		setServerError(null);
-	}, [roomId, userName]);
-
 	useEffect(() => {
 		if (!ws) {
-			socketRef.current = null;
 			setConnectionStatus(roomId && userName ? "Connecting" : "Enter room info");
 			return;
 		}
-
-		socketRef.current = ws;
 
 		const updateStatus = () => {
 			setConnectionStatus(SOCKET_STATUS[ws.readyState] ?? "Connecting");
@@ -53,7 +44,7 @@ const DemoPage = () => {
 			const raw = z.string().safeParse(event.data);
 
 			const schema = z.object({
-				type: z.literal(["joined", "history", "message", "error"]),
+				type: z.enum(["joined", "history", "message", "error"]),
 				payload: serverHistoryEntrySchema.optional(),
 				messages: serverHistoryEntrySchema.array().optional(),
 				message: z.string().optional(),
@@ -116,7 +107,6 @@ const DemoPage = () => {
 		};
 
 		const handleClose = (event: CloseEvent) => {
-			socketRef.current = null;
 			if (event.code === 400) {
 				setServerError("Connection rejected: verify room ID and username.");
 				setConnectionStatus("Error");
@@ -142,21 +132,11 @@ const DemoPage = () => {
 		return () => abortController.abort();
 	}, [ws, roomId, userName]);
 
-	useEffect(() => {
-		if (!scrollAreaRef.current) {
-			return;
-		}
-
-		scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
-	}, [messages]);
-
-	const timeFormatter = useMemo(() => new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }), []);
-
 	const handleJoinSubmit = (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 
-		const nextRoom = roomInputValue.trim();
-		const nextUserName = userNameInputValue.trim();
+		const nextRoom = form.getValues("room").trim();
+		const nextUserName = form.getValues("username").trim();
 		if (!nextRoom || !nextUserName) {
 			setServerError("Both room ID and username are required.");
 			setConnectionStatus("Enter room info");
@@ -165,30 +145,26 @@ const DemoPage = () => {
 
 		const currentRoom = roomId ?? "";
 		const currentUser = userName ?? "";
-		if (
-			nextRoom === currentRoom &&
-			nextUserName === currentUser &&
-			socketRef.current?.readyState === WebSocket.OPEN
-		) {
+
+		if (nextRoom === currentRoom && nextUserName === currentUser) {
 			return;
 		}
 
 		setServerError(null);
 		setRoomId(nextRoom);
 		setUserName(nextUserName);
-		setRoomInputValue(nextRoom);
-		setUserNameInputValue(nextUserName);
-		setConnectionToken((token) => token + 1);
+		// setConnectionToken((token) => token + 1);
 		setConnectionStatus("Connecting");
+		setMessages([]);
 	};
 
 	const hasSession = Boolean(roomId && userName);
-	const isSocketReady = hasSession && socketRef.current?.readyState === WebSocket.OPEN;
+	const isSocketReady = ws?.readyState === WebSocket.OPEN;
 
 	const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 
-		const parsedPayload = z.string().trim().min(1).safeParse(inputValue);
+		const parsedPayload = z.string().trim().min(1).safeParse(form.getValues("message"));
 		if (!parsedPayload.success || !isSocketReady) {
 			if (!hasSession) {
 				setServerError("Join a room before sending messages.");
@@ -196,8 +172,8 @@ const DemoPage = () => {
 			return;
 		}
 
-		socketRef.current?.send(JSON.stringify({ type: "chat", text: parsedPayload.data }));
-		setInputValue("");
+		ws?.send(JSON.stringify({ type: "chat", text: parsedPayload.data }));
+		form.resetField("message");
 	};
 
 	const statusVariant: BadgeProps["variant"] =
@@ -220,71 +196,17 @@ const DemoPage = () => {
 				</CardHeader>
 				<CardContent className="flex flex-col gap-3">
 					<form onSubmit={handleJoinSubmit} className="flex flex-col gap-3 sm:flex-row">
-						<Input
-							name="room"
-							placeholder="Enter a room ID..."
-							value={roomInputValue}
-							onChange={(event) => setRoomInputValue(event.target.value)}
-							autoComplete="off"
-						/>
-						<Input
-							name="username"
-							placeholder="Enter your username..."
-							value={userNameInputValue}
-							onChange={(event) => setUserNameInputValue(event.target.value)}
-							autoComplete="off"
-						/>
-						<Button type="submit" disabled={!roomInputValue.trim() || !userNameInputValue.trim()}>
-							Join chat
-						</Button>
+						<FormInput control={form.control} name="room" placeholder="Enter a room ID..." />
+						<FormInput control={form.control} name="username" placeholder="Enter your username..." />
+						<HeaderButton>Join chat</HeaderButton>
 					</form>
+
 					{serverError && <p className="text-xs text-red-600 dark:text-red-400">{serverError}</p>}
-					<ScrollArea
-						ref={scrollAreaRef}
-						className="h-80 rounded-2xl border border-dashed border-neutral-200 bg-neutral-50/80 p-4 dark:border-neutral-800 dark:bg-neutral-900/60"
-					>
-						{!hasSession ? (
-							<div className="flex h-full items-center justify-center text-center text-sm text-neutral-500 dark:text-neutral-400">
-								Provide a room ID and username to start chatting.
-							</div>
-						) : messages.length === 0 ? (
-							<div className="flex h-full items-center justify-center text-center text-sm text-neutral-500 dark:text-neutral-400">
-								No messages yet. Say hello to get the conversation started.
-							</div>
-						) : (
-							<div className="flex flex-col gap-3">
-								{messages.map((message) => {
-									const isSelf = message.userName === (userName ?? "");
-									const timestampLabel = timeFormatter.format(message.timestamp);
-									return (
-										<div
-											key={message.id}
-											className={cn("flex", isSelf ? "justify-end" : "justify-start")}
-										>
-											<div className="max-w-[75%] space-y-1">
-												<div
-													className={cn(
-														"rounded-2xl px-4 py-2 text-sm shadow-sm",
-														isSelf
-															? "bg-sky-600 text-white dark:bg-sky-500"
-															: "bg-white text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
-													)}
-												>
-													<span className="block text-xs font-medium">
-														{isSelf ? "You" : message.userName}
-													</span>
-													<span>{message.text}</span>
-												</div>
-												<span className="block text-xs text-neutral-400 dark:text-neutral-500">
-													{timestampLabel}
-												</span>
-											</div>
-										</div>
-									);
-								})}
-							</div>
-						)}
+
+					<ScrollArea className="h-80 rounded-2xl border border-dashed border-neutral-200 bg-neutral-50/80 p-4 dark:border-neutral-800 dark:bg-neutral-900/60">
+						<MessageArea messages={messages} hasSession={hasSession} />
 					</ScrollArea>
+
 					{hasSession && !isSocketReady && (
 						<p className="text-xs text-neutral-500 dark:text-neutral-400">
 							Waiting for the socket to connect before sending messages.
@@ -293,17 +215,13 @@ const DemoPage = () => {
 				</CardContent>
 				<CardFooter>
 					<form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row">
-						<Input
+						<FormInput
+							control={form.control}
 							name="message"
 							placeholder={hasSession ? "Type a message..." : "Join a room to chat"}
-							value={inputValue}
-							onChange={(event) => setInputValue(event.target.value)}
-							autoComplete="off"
 							disabled={!hasSession}
 						/>
-						<Button type="submit" disabled={!inputValue.trim() || !isSocketReady}>
-							Send
-						</Button>
+						<FooterButton disabled={!isSocketReady}>Send</FooterButton>
 					</form>
 				</CardFooter>
 			</Card>
