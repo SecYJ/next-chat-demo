@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getWsUrl } from "../env";
 import { z } from "zod";
 
@@ -15,17 +15,22 @@ const roomSchema = z.object({
 
 export const useWebSocket = ({ roomId, userName }: WebSocketArgs) => {
 	const wsRef = useRef<WebSocket | null>(null);
+	const [socket, setSocket] = useState<WebSocket | null>(null);
 	const { roomId: normalizedRoom, userName: normalizedUserName } = roomSchema.parse({ roomId, userName });
 
 	useEffect(() => {
 		if (!normalizedRoom || !normalizedUserName) {
-			wsRef.current?.close();
-			wsRef.current = null;
+			if (wsRef.current) {
+				wsRef.current.close();
+				wsRef.current = null;
+			}
+			setSocket(null);
 			return;
 		}
 
 		const ws = new WebSocket(getWsUrl(normalizedRoom, normalizedUserName));
 		wsRef.current = ws;
+		setSocket(ws);
 
 		ws.onopen = () => {
 			console.log(`Connected to server (room: ${normalizedRoom}, user: ${normalizedUserName})`);
@@ -42,11 +47,12 @@ export const useWebSocket = ({ roomId, userName }: WebSocketArgs) => {
 
 		return () => {
 			ws.close();
-			if (wsRef.current) {
+			if (wsRef.current === ws) {
 				wsRef.current = null;
 			}
+			setSocket((current) => (current === ws ? null : current));
 		};
 	}, [normalizedRoom, normalizedUserName]);
 
-	return wsRef.current;
+	return socket;
 };

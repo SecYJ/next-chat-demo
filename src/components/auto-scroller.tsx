@@ -9,22 +9,27 @@ const AutoScroller = ({ children, className }: Props) => {
 	const ref = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
+		const target = ref.current;
+		if (!target) {
+			return;
+		}
+
 		const mutationObserver = new MutationObserver(() => {
-			if (ref.current) {
-				ref.current.scrollTo({
-					behavior: "smooth",
-					top: ref.current.scrollHeight,
-				});
-			}
+			target.scrollTo({
+				behavior: "smooth",
+				top: target.scrollHeight,
+			});
 		});
 
-		if (ref.current) {
-			mutationObserver.observe(ref.current, {
-				childList: true,
-				subtree: true,
-			});
-		}
-	}, [ref.current]);
+		mutationObserver.observe(target, {
+			childList: true,
+			subtree: true,
+		});
+
+		return () => {
+			mutationObserver.disconnect();
+		};
+	}, []);
 
 	return (
 		<div ref={ref} className={className}>

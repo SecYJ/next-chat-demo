@@ -204,7 +204,7 @@ const DemoPage = () => {
 					{serverError && <p className="text-xs text-red-600 dark:text-red-400">{serverError}</p>}
 
 					<ScrollArea className="h-80 rounded-2xl border border-dashed border-neutral-200 bg-neutral-50/80 p-4 dark:border-neutral-800 dark:bg-neutral-900/60">
-						<MessageArea messages={messages} hasSession={hasSession} />
+						<MessageArea messages={messages} hasSession={hasSession} currentUser={userName} />
 					</ScrollArea>
 
 					{hasSession && !isSocketReady && (
